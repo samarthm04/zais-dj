@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI DJ - cue point audition</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <h1>Cue point audition</h1>
+    <p class="sub">Upload up to 10 songs, analyze them, then scrub to each detected cue point and listen.</p>
+  </header>
+
+  <section class="controls">
+    <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.flac,.aac,.ogg,.aiff" multiple>
+    <button id="upload-btn">Upload</button>
+    <button id="process-btn">Process</button>
+    <span id="status"></span>
+  </section>
+
+  <section class="mixer" id="mixer" hidden>
+    <h2>Build a transition</h2>
+    <div class="mix-row">
+      <label>From <select id="mix-from"></select></label>
+      <label>exit cue <select id="mix-from-cue"></select></label>
+    </div>
+    <div class="mix-row">
+      <label>Into <select id="mix-to"></select></label>
+      <label>entry cue <select id="mix-to-cue"></select></label>
+    </div>
+    <div class="mix-row">
+      <label>Crossfade
+        <select id="mix-bars">
+          <option value="4">4 bars</option>
+          <option value="8" selected>8 bars</option>
+          <option value="16">16 bars</option>
+          <option value="32">32 bars</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="mix-match" checked> match tempo</label>
+      <button id="mix-btn">Render</button>
+      <span id="mix-status"></span>
+    </div>
+    <div id="mix-out"></div>
+  </section>
+
+  <section class="mixer" id="setbuilder" hidden>
+    <h2>Build a full set</h2>
+    <div class="mix-row">
+      <label>Style <select id="set-preset"></select></label>
+      <label>Play <select id="set-seconds">
+        <option value="45">45s</option>
+        <option value="60" selected>60s</option>
+        <option value="90">90s</option>
+        <option value="120">120s</option>
+      </select> per track</label>
+      <label>Open with <select id="set-start"></select></label>
+      <label title="Insert a generated tempo-ramping bridge where two tracks are too far apart to beatmatch">
+        <input type="checkbox" id="set-fillers" checked> bridge fillers</label>
+      <button id="set-btn">Build set</button>
+      <span id="set-status"></span>
+    </div>
+    <div id="set-out"></div>
+  </section>
+
+  <main id="tracks"></main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

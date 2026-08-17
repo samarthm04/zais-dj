@@ -1,0 +1,16 @@
+# One venv serves both the API and audio_analysis.
+# Needs Python 3.13 — librosa/numba have no wheels for 3.14 yet.
+#   python3.13 -m venv backend/.venv
+#   backend/.venv/bin/pip install -r backend/requirements.txt
+
+fastapi==0.141.1
+uvicorn==0.52.3
+python-multipart==0.0.32
+
+# audio_analysis
+librosa==1.0.0
+soundfile==0.14.0
+numpy==2.5.2
+scipy==1.18.0
+
+# m4a/aac decoding also needs ffmpeg on PATH (brew install ffmpeg).

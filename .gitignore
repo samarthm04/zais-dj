@@ -1,0 +1,18 @@
+# Audio and everything derived from it. The uploads are commercial
+# recordings and the mixes contain them, so neither belongs in a repo —
+# pushing them would be publishing the music itself.
+backend/data/
+
+# Virtual environment: 383MB, and platform specific. Rebuild with
+#   python3.13 -m venv backend/.venv
+#   backend/.venv/bin/pip install -r backend/requirements.txt
+backend/.venv/
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+.DS_Store
+*.swp
