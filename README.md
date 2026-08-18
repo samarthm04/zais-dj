@@ -26,8 +26,18 @@ backend/.venv/bin/python -m uvicorn backend.app:app --port 8765
 ```
 
 Open <http://127.0.0.1:8765/>. Upload audio, press **Process**, then build a
-set. Analysis runs about 15 seconds per track; a six-track set renders in
-about 10 seconds.
+set. Analysis runs about 30 seconds per track; a six-track set renders in
+about 20 seconds.
+
+Ordering by learned audio similarity is optional and off unless installed —
+it pulls in torch (~700MB) and the model is GPL-3.0:
+
+```bash
+backend/.venv/bin/pip install torch diffusers
+backend/.venv/bin/pip install --no-deps audiodiffusion
+```
+
+Without it the engine orders on tempo, key and energy instead, with no error.
 
 Opening `frontend/index.html` directly from disk will not work — the page
 needs the backend that serves it, and it will tell you so.
@@ -73,6 +83,19 @@ genuine seven-beat cycle is already mis-gridded before this code sees it,
 and "detecting" one would be reporting an artefact. Keherwa (8) and Teentaal
 (16) survive a 4/4 grid, and those are most film and pop music anyway.
 
+**Vocal activity.** Two voices over each other is the most audible mistake a
+mix can make, and it gets worse the longer the blend. Three absolute
+measurements identify singing, each ruling out a different impostor: energy
+in the voice band (a bass line scores 0.00 and drums 0.23 against a voice's
+0.88), how fast the spectral envelope moves (a sustained pad holds still at
+1.8 where a voice articulating vowels reaches 5.2), and harmonic against
+percussive share in-band (percussion drops to 0.09). Multiplied rather than
+summed, so any one failing vetoes the frame.
+
+An earlier version normalised each feature per track, which made every value
+relative to that track's own range and scored a plain bass line higher than
+singing. Absolute features separate voice from the nearest impostor by 17x.
+
 **Cue points.** Candidates are phrase-aligned downbeats scored on phrase
 position, energy shape and proximity to a structural boundary. Entry cues
 favour quiet, rising moments; exit cues favour falling energy late in a
@@ -95,7 +118,7 @@ costs 2.5% at 6%. Keylock (vocoder) is used only where a track is bent past
 
 | style | what it solves |
 |---|---|
-| `bass_swap` | two loud records fighting over the low end |
+| `bass_swap` | two loud records fighting over the low end; drops the outgoing bass a third of the way in, then its highs two thirds in |
 | `filter_sweep` | making a busy track evaporate as energy falls |
 | `echo_out` | a dramatic exit into an arrival; needs no tempo match |
 | `cut` | a slam — gated to short overlaps |
@@ -108,6 +131,22 @@ arrives mid-cycle, then sized by how well the pair sits together and where
 it falls in the set. Long overlaps belong late, once a set has built to
 them. Sixteen bars over clashing keys is thirty seconds of dissonance, so
 position raises the target while harmonic compatibility gates it.
+
+**Sonic ordering (optional).** Tempo, key and energy say whether two tracks
+*can* be mixed; they say little about whether they belong together. teticio's
+[Deej-AI](https://github.com/teticio/Deej-AI) encoder was trained on a million
+Spotify playlists — songs as words, playlists as sentences — so its vectors
+carry which tracks humans actually put next to each other, and a CNN over
+spectrograms makes that usable on local files.
+
+Distance is Euclidean on the raw vectors. Cosine does not work: they share an
+enormous common component, so every pair scores 0.99-1.00 and discriminates
+nothing. Mean-centring fixes it, but the centre moves as the library changes;
+Euclidean needs no reference point and finds the same neighbours.
+
+**Vocal clash.** Blends shorten where both sides are singing, and style
+selection shifts toward taking the outgoing track apart — filtered or echoed
+away — rather than layering two intact records.
 
 **Ordering.** Tracks are placed against a target energy arc rather than a
 monotonic climb — a set with no valleys has no peaks either. Presets choose
@@ -161,6 +200,7 @@ audio_analysis/     offline analysis, no web dependencies
   tala.py           cycle length, sam, taali, khaali
   energy.py         energy curve
   structure.py      structural segmentation
+  vocals.py         vocal activity detection
   cue_points.py     ranked entry and exit cues
   pipeline.py       analyze_track()
 
@@ -174,6 +214,7 @@ backend/            FastAPI service and the mixing engine
   mix.py            renders a single transition
   filler.py         synthesised tempo-ramping bridges
   preferences.py    remembered verdicts
+  embedding.py      learned audio similarity (optional)
 
 frontend/           plain HTML/CSS/JS, no build step
 ```
@@ -195,6 +236,11 @@ State lives in `backend/data/` — uploads, analysis JSON, rendered mixes and
   for peaks and troughs that nothing available can fill.
 - **Cue scoring is hand-tuned** and unvalidated against listening. This is
   what the feedback data exists to fix.
+- **The similarity model is trained on Western playlists.** teticio scraped
+  Spotify by English-letter search and excluded curated playlists, so
+  non-Western repertoire — Hindi film music in particular — is likely thin in
+  the training data, and the model falls back to something generic where it
+  has no signal.
 - **Tempo octave is ambiguous.** A 186 BPM track may be reported as 93. The
   grid is correct either way, but the label depends on convention.
 
