@@ -55,6 +55,10 @@ PRESETS = {
 # in well under a second.
 MAX_EXACT = 8
 
+# How hard learned similarity pulls against tempo and key. Enough to pick
+# between otherwise equal orderings, not enough to force a tempo clash.
+SONIC_WEIGHT = 9.0
+
 
 def camelot_distance(a: str | None, b: str | None) -> float:
     """Steps around the Camelot wheel. 0 is the same key, 1 a neighbour."""
@@ -132,6 +136,13 @@ def pair_cost(t1: dict, t2: dict, preset: dict, prefs: dict | None = None) -> fl
     confidence = min(t1.get("key_confidence", 0.0), t2.get("key_confidence", 0.0))
     if confidence < 0.15:
         cost -= key * 2.0
+
+    # How much the two actually sound like they belong together. Tempo, key
+    # and energy only say a pairing is possible; this is the one signal about
+    # whether it is a good idea. Absent when the encoder is not installed.
+    sonic = t1.get("embedding_distance_to", {}).get(t2.get("track_id"))
+    if sonic is not None:
+        cost += min(sonic, 1.5) * SONIC_WEIGHT
 
     # A remembered verdict on this exact handover outranks the heuristics,
     # since it came from someone actually listening to it.

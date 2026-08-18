@@ -14,3 +14,9 @@ numpy==2.5.2
 scipy==1.18.0
 
 # m4a/aac decoding also needs ffmpeg on PATH (brew install ffmpeg).
+
+# Optional: learned audio similarity (Deej-AI encoder).
+# Heavy (~700MB with torch) and GPL-3.0, so the engine runs without it and
+# falls back to tempo/key/energy ordering. Install with:
+#   pip install torch diffusers
+#   pip install --no-deps audiodiffusion

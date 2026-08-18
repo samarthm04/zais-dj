@@ -318,6 +318,9 @@ def delete_track(track_id: str):
         f.unlink(missing_ok=True)
     directory.rmdir()
     result_path(track_id).unlink(missing_ok=True)
+
+    from backend import embedding
+    embedding.forget(track_id)
     return {"deleted": track_id, "remaining": len(list_tracks())}
 
 
@@ -422,8 +425,24 @@ def build_set(req: SetRequest):
         raise HTTPException(status_code=400,
                             detail="need at least 2 analyzed tracks with cue points")
 
+    from backend import embedding
     from backend.preferences import load as load_prefs
     from backend.setrender import MAX_MATCHABLE_PCT
+
+    # Learned similarity, if the encoder is installed. Vectors are cached per
+    # track, so this only pays the model load on the first set after a
+    # restart, and nothing at all when the encoder is absent.
+    if embedding.available():
+        vectors = {c["track_id"]: embedding.embed(c["track_id"], c["path"])
+                   for c in candidates}
+        for c in candidates:
+            mine = vectors.get(c["track_id"])
+            c["embedding_distance_to"] = {
+                other["track_id"]: d
+                for other in candidates
+                if other["track_id"] != c["track_id"]
+                and (d := embedding.distance(mine, vectors.get(other["track_id"]))) is not None
+            }
 
     prefs = load_prefs()
     ordered = order_tracks(candidates, preset, start_id=req.start_track_id, prefs=prefs)
@@ -454,6 +473,7 @@ def build_set(req: SetRequest):
         "pairing": pairing,
         "skipped": skipped,
         "all_beatmatched": not unmatched,
+        "sonic_ordering": bool(candidates and candidates[0].get("embedding_distance_to")),
         "reprises": sum(1 for t in sequence if t.get("is_reprise")),
         **details,
     }
