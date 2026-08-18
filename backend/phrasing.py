@@ -128,6 +128,13 @@ def _suitable_length(preferred_bars: int, context: dict | None):
         scale *= 1.0 - min(0.35, (energy_jump - 0.15) * 1.2)
         notes.append(f"shortened for an energy jump of {energy_jump:.2f}")
 
+    clash = float(context.get("vocal_clash") or 0.0)
+    if clash > 0.15:
+        # Every extra bar is another bar of two lead vocals competing, so the
+        # overlap shrinks as the clash gets worse.
+        scale *= 1.0 - min(0.45, (clash - 0.15) * 1.6)
+        notes.append(f"shortened — both tracks singing ({clash:.2f} overlap)")
+
     key_distance = float(context.get("camelot_distance") or 0.0)
     if key_distance >= 2.0:
         scale *= 1.0 - min(0.3, (key_distance - 1.0) / 12.0)

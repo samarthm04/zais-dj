@@ -14,7 +14,8 @@ STYLES = ("blend", "bass_swap", "filter_sweep", "echo_out", "cut")
 
 def choose(preferred: tuple[str, ...], *, energy_from: float, energy_to: float,
            bars: int = 8, key_distance: float = 0.0,
-           tempo_delta_pct: float = 0.0, recent: tuple[str, ...] = ()) -> str:
+           tempo_delta_pct: float = 0.0, recent: tuple[str, ...] = (),
+           vocal_clash: float = 0.0) -> str:
     """Pick a style for one handover by scoring each against what it is for.
 
     Every style answers a different musical situation. A bass swap solves two
@@ -54,6 +55,17 @@ def choose(preferred: tuple[str, ...], *, energy_from: float, energy_to: float,
         # A slam. Only reads as one going up, loud, and over quickly.
         "cut": 0.05 + 0.70 * max(0.0, lift) + 0.30 * energy_to - 0.60 * length,
     }
+
+    # Two voices over each other is the most audible thing a mix can get
+    # wrong. When both sides are singing, favour the styles that take the
+    # outgoing track apart — filtered away or echoed out — over the ones that
+    # layer both records intact.
+    if vocal_clash > 0.15:
+        weight = min(1.0, (vocal_clash - 0.15) / 0.25)
+        fit["blend"] -= 0.55 * weight
+        fit["bass_swap"] -= 0.30 * weight
+        fit["filter_sweep"] += 0.35 * weight
+        fit["echo_out"] += 0.30 * weight
 
     # Variety is part of good mixing. The same move three times running stops
     # being a choice and starts being a tic.
@@ -114,19 +126,24 @@ def _blend(a, b, fade_n):
 
 
 def _bass_swap(a, b, sr, fade_n):
-    """Hand the low end over at the midpoint, the way a mixer's EQ kills do.
+    """Hand the low end over, then the top, the way a mixer's EQ kills do.
 
-    Both tracks stay audible throughout; only one owns the bass at a time, so
-    the kicks and basslines never stack up.
+    Swapping only the bass leaves both tracks' vocals, hats and synths piled
+    on top of each other for the whole overlap, which is where a blend turns
+    to mush. Real practice is two moves: take the outgoing track's bass out
+    first so the kicks stop stacking, then a few bars later take its highs
+    out too, leaving it as a midrange bed under the incoming track before it
+    goes entirely.
     """
-    swap = fade_n // 2
-    a_hp = _highpass(a, sr, 240.0)
-    b_hp = _highpass(b, sr, 240.0)
+    low_swap = fade_n // 3
+    high_swap = (fade_n * 2) // 3
 
     a_out = a.copy()
-    a_out[..., swap:] = a_hp[..., swap:]          # A loses its bass at the swap
+    a_out[..., low_swap:] = _highpass(a, sr, 240.0)[..., low_swap:]
+    a_out[..., high_swap:] = _lowpass(a_out, sr, 3500.0)[..., high_swap:]
+
     b_out = b.copy()
-    b_out[..., :swap] = b_hp[..., :swap]          # B has none until then
+    b_out[..., :low_swap] = _highpass(b, sr, 240.0)[..., :low_swap]
 
     # Gentler level crossfade; the EQ is doing the work.
     out_c, in_c = _curves(fade_n)
@@ -187,6 +204,11 @@ def _cut(a, b, sr, fade_n):
     b_out = b.copy()
     b_out[..., :edge] *= np.linspace(0.0, 1.0, edge, dtype=np.float32)
     return a_out, b_out
+
+
+def _lowpass(x: np.ndarray, sr: int, cutoff: float) -> np.ndarray:
+    sos = butter(4, cutoff / (sr / 2), btype="lowpass", output="sos")
+    return sosfilt(sos, x, axis=-1).astype(np.float32)
 
 
 def _highpass(x: np.ndarray, sr: int, cutoff: float) -> np.ndarray:

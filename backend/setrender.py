@@ -89,6 +89,21 @@ def render_set(items: list[dict], preset: dict, out_path: Path,
 
     # The phrasing agent sets each handover's length from the two tracks'
     # cycles, so it varies down the set rather than being one fixed number.
+    # How much both tracks are singing across the region they will overlap.
+    # Measured on the preset's nominal length, since the real length is what
+    # this is about to decide.
+    clashes = []
+    for i in range(n - 1):
+        span = bars * 4 * 60.0 / max(1e-6, tempos[i])
+        out_vocal = _vocal_over(items[i]["result"],
+                                float(items[i]["exit_time"]) - span,
+                                float(items[i]["exit_time"]))
+        in_vocal = _vocal_over(items[i + 1]["result"],
+                               float(items[i + 1]["entry_time"]),
+                               float(items[i + 1]["entry_time"]) + span)
+        # The lesser of the two: a clash needs both of them singing.
+        clashes.append(min(out_vocal, in_vocal))
+
     plans = []
     for i in range(n - 1):
         plans.append(phrasing.blend_bars(
@@ -101,6 +116,7 @@ def render_set(items: list[dict], preset: dict, out_path: Path,
                 "tempo_delta_percent": junctions[i]["delta"],
                 "energy_from": items[i].get("energy", 0.5),
                 "energy_to": items[i + 1].get("energy", 0.5),
+                "vocal_clash": clashes[i],
                 "camelot_distance": camelot_distance(
                     (items[i]["result"].get("key") or {}).get("camelot"),
                     (items[i + 1]["result"].get("key") or {}).get("camelot"),
@@ -272,6 +288,7 @@ def render_set(items: list[dict], preset: dict, out_path: Path,
                 ),
                 tempo_delta_pct=residual,
                 recent=tuple(styles),
+                vocal_clash=clashes[i],
             )
             blend_tempo = junctions[i]["tempo"] or tempos[i]
             timeline[i]["transition_to_next"] = style
@@ -279,6 +296,7 @@ def render_set(items: list[dict], preset: dict, out_path: Path,
             timeline[i]["phrasing"] = plans[i]
             timeline[i]["beatmatched"] = junctions[i]["matched"]
             timeline[i]["tempo_delta_percent"] = round(junctions[i]["delta"], 2)
+            timeline[i]["vocal_clash"] = round(clashes[i], 3)
 
         a_tail, b_head = transitions.apply(style, a[..., -fade_n:], b[..., :fade_n],
                                            RENDER_SR, fade_n, tempo=blend_tempo)
@@ -377,6 +395,15 @@ def _slice(y: np.ndarray, sr: int, start: float, end: float) -> np.ndarray:
     if e > s:
         out[:, : e - s] = y[:, s:e]
     return out
+
+
+def _vocal_over(result: dict, start: float, end: float) -> float:
+    """Mean vocal activity across a span, read off the analysed curve."""
+    curve = result.get("vocal_curve") or []
+    if not curve or end <= start:
+        return 0.0
+    values = [p["vocal"] for p in curve if start <= p.get("t", -1) < end]
+    return float(sum(values) / len(values)) if values else 0.0
 
 
 def _rms(x: np.ndarray) -> float:

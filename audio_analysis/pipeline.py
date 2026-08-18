@@ -9,6 +9,8 @@ from .energy import energy_curve, sample_curve
 from .loader import load_audio
 from .structure import detect_segments
 from .tala import detect_cycle
+from .vocals import sample_curve as sample_vocals
+from .vocals import segment_vocal_ratio, vocal_activity
 
 
 def analyze_track(path: str | Path, track_id: str | None = None) -> dict:
@@ -27,9 +29,12 @@ def analyze_track(path: str | Path, track_id: str | None = None) -> dict:
     key = detect_key(y, sr)
     energy = energy_curve(y, sr, onset_env=beats["onset_env"])
     cycle = detect_cycle(y, sr, beats["beat_times"], onset_env=beats["onset_env"])
+    vocals = vocal_activity(y, sr)
     segments = detect_segments(
         y, sr, energy["times"], energy["energy"], beats["downbeat_times"]
     )
+    segments = segment_vocal_ratio(segments, vocals["times"], vocals["activity"])
+
     cues = detect_cue_points(
         duration=duration,
         tempo=beats["tempo"],
@@ -56,6 +61,7 @@ def analyze_track(path: str | Path, track_id: str | None = None) -> dict:
             "downbeat_times": beats["downbeat_times"],
         },
         "cycle": cycle,
+        "vocal_curve": sample_vocals(vocals["times"], vocals["activity"], step=1.0),
         "energy_curve": sample_curve(energy["times"], energy["energy"], step=1.0),
         "segments": segments,
         "cue_points": cues,
